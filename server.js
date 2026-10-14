@@ -18,6 +18,7 @@ const API_BASE = (process.env.GEMINI_API_BASE || 'https://generativelanguage.goo
 const MAX_IMAGE = 10 * 1024 * 1024;                       // matches the client limit
 const MAX_BODY = Math.ceil(MAX_IMAGE * 4 / 3) + 64 * 1024; // base64 overhead + JSON
 const MAX_NOTES = 500;
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*'; // set to your website's address to lock it down
 
 const SYSTEM = `You write prompts for AI image generators. You receive a reference image, a mode, and optional user instructions.
 Study the image closely before writing: main subject and secondary objects, composition and framing, pose and positioning, camera perspective and lens feel, background and environment, lighting, shadows and colors, artistic style or photographic aesthetic, texture, atmosphere and mood, and other distinctive visible details. Mention text or logos only if clearly legible.
@@ -45,7 +46,7 @@ function detectType(b) {
 }
 
 function send(res, status, body, type = 'application/json; charset=utf-8') {
-  res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+  res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'access-control-allow-origin': ALLOWED_ORIGIN, 'vary': 'Origin' });
   res.end(type.startsWith('application/json') ? JSON.stringify(body) : body);
 }
 const fail = (res, status, error) => send(res, status, { error });
@@ -145,6 +146,10 @@ const page = path.join(__dirname, 'index.html');
 http.createServer(async (req, res) => {
   try {
     const url = req.url.split('?')[0];
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, { 'access-control-allow-origin': ALLOWED_ORIGIN, 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'content-type', 'access-control-max-age': '86400' });
+      return res.end();
+    }
     if (req.method === 'GET' && (url === '/' || url === '/index.html')) return send(res, 200, fs.readFileSync(page), 'text/html; charset=utf-8');
     if (req.method === 'POST' && url === '/api/generate') return await generate(req, res);
     fail(res, 404, 'Not found.');
